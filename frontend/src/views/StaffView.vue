@@ -1,19 +1,14 @@
 <template>
-    <div>
-        Staff
-    </div>
+  <div>
+    <StaffDash v-if="isLoggedIn" />
+    <LoginPage v-else />
+  </div>
 </template>
-
-
-
 <script>
-
-export default{
-    name:"StaffView",
-    components: {
-        
-    },
+import LoginPage from '../components/LoginPage.vue'
+import StaffDash from '../components/StaffDash.vue'
+export default {
+  components: { LoginPage, StaffDash },
+  computed: { isLoggedIn() { return localStorage.getItem('token') && localStorage.getItem('role') === 'staff' } }
 }
-
 </script>
-

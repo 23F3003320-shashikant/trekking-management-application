@@ -3,11 +3,17 @@ import { RouterView } from 'vue-router'
 </script>
 
 <template>
+  
 <div></div>
-
   <RouterView />
 </template>
 
+<script>
+export default {
+  name:'APP'
+}
+
+</script>
 <style scoped>
 header {
   line-height: 1.5;
