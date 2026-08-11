@@ -65,7 +65,7 @@ class Booking(db.Model):
     trek_id        = db.Column(db.Integer,     db.ForeignKey('treks.trek_id'),  nullable=False)
     booking_date   = db.Column(db.DateTime, default=datetime.utcnow)
     status         = db.Column(db.String(200), nullable=False, default='Confirmed')
-    payment_status = db.Column(db.String(200), nullable=False, default='Pending')
+    payment_status = db.Column(db.String(200), nullable=False, default='Paid')
     completed_on   = db.Column(db.DateTime)
 
     user = db.relationship('Users', back_populates='booking')

@@ -1,9 +1,13 @@
 from datetime import datetime
 from models.models import db, Users, Treks, Staff, Booking
-import os
 from flask_cors import CORS
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+
+
+
+
+
 
 
 app = Flask(__name__)
@@ -19,7 +23,22 @@ db.init_app(app)
 app.app_context().push()
 db.create_all()
 
-# ── Data serialisers ──────────────────────────────────────────────────────────
+
+
+# ── Data sapport ──────────────────────────────────────────────────────────
+
+
+TREK_IMAGES = [
+    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80",
+    "https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80",
+    "https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=600&q=80",
+    "https://images.unsplash.com/photo-1606768666853-403c90a981ad?w=600&q=80",
+    "https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?w=600&q=80",
+    "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=600&q=80",
+    "https://images.unsplash.com/photo-1612892483236-52d32a0e0ac1?w=600&q=80",
+    "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&q=80",
+]
+
 
 def make_token(user):
     role = (user.role or 'trekker').strip().lower()
@@ -35,15 +54,6 @@ def current_identity():
    role = get_jwt().get("role", "trekker")
    return email, role
 
-
-
-@app.route('/', methods=["GET", "POST"])
-@jwt_required()
-def home():
-   print(get_jwt_identity())
-   data = {"numbers" : [1, 2, 3, 4, 5], 
-            "message" : "Hello, World!"}
-   return jsonify(data, 200) 
 
 def trek_to_dict(t):
     staff_name = t.staff.staff_name if t.assigned_staff_id and t.staff else None
@@ -110,8 +120,6 @@ def login():
 @app.route('/register', methods=['POST'])
 def Register():
     data = request.get_json()
-    if not data:
-      return jsonify({"message":"Invalid data"}), 400
 
     name= data.get("name")
     email_id= data.get("email_id")
@@ -137,9 +145,9 @@ def Register():
 
 
 
-# ───  Admin ────────────────────────────────────────────────────────────
+# ───  Admin(USERS) ────────────────────────────────────────────────────────────
 
-@app.route('/admindashboard', methods=["GET"])
+@app.route('/users', methods=["GET"])
 @jwt_required()
 def admin_dashboard():
    identity = get_jwt_identity()
@@ -162,50 +170,25 @@ def admin_dashboard():
    return jsonify(result), 200
 
 
-
-
-
-
-# ─── USERS ────────────────────────────────────────────────────────────────────
-@app.route('/users', methods=['GET'])
-@jwt_required()
-def get_users():
-   email, role = current_identity()
-
-   if role != "admin":
-      return jsonify({"massage": "unauthorized"}), 403
-   
-   users  = Users.query.filter_by(role='trekker').all()
-
-   result=[]
-
-   for u in users:
-      result.append({
-         "email_id": u.email_id, "name": u.name, "role": u.role,
-         "contact": u.contact, "is_active": u.is_active,
-         "created_at": u.created_at.strftime('%d %b %Y') if u.created_at else ""
-      })
-
-   return jsonify(result), 200
-
-
 @app.route('/users/<email_id>/toggle', methods=['PUT'])
 @jwt_required()
 def toggle_user(email_id):
     email, role = current_identity()
-
     if role != "admin":
         return jsonify({"message": "Unauthorized"}), 403
-    
+
     user = Users.query.get(email_id)
     if not user:
         return jsonify({"message": "User not found"}), 404
-    user.is_active = not user.is_active
 
+    user.is_active = not user.is_active
     db.session.commit()
 
-    return jsonify({"message": "activated" if user.is_active else "blacklisted",
-                  "is_active": user.is_active}), 200
+    status = "activated" if user.is_active else "blacklisted"
+    return jsonify({
+        "message":   f"User {status} successfully",
+        "is_active": user.is_active
+    }), 200
 
 
 @app.route('/users/<email_id>', methods=['DELETE'])
@@ -214,60 +197,80 @@ def delete_user(email_id):
     email, role = current_identity()
     if role != "admin":
         return jsonify({"message": "Unauthorized"}), 403
+
     user = Users.query.get(email_id)
     if not user:
         return jsonify({"message": "User not found"}), 404
+
     db.session.delete(user)
     db.session.commit()
     return jsonify({"message": "User deleted"}), 200
 
 
-
 # ─── STAFF ────────────────────────────────────────────────────────────────────
-@app.route('/staff', methods=['GET',"POST"])
+@app.route('/staff', methods=['GET'])
 @jwt_required()
 def get_staff():
-   email, role = current_identity()
-
-   if role != "admin":
-           return jsonify({"message": "Unauthorized"}), 403
-   
-   result = []
-   for s in Staff.query.all():
-      result.append({
-            "staff_id": s.staff_id, "email_id": s.email_id,
-            "staff_name": s.staff_name, "contact": s.contact,
-            "specialization": s.specialization, "experience": s.experience,
-            "is_active": s.is_active,
+    result = []
+    for s in Staff.query.all():
+        result.append({
+            "staff_id":       s.staff_id,
+            "email_id":       s.email_id,
+            "staff_name":     s.staff_name,
+            "contact":        s.contact,
+            "specialization": s.specialization,
+            "experience":     s.experience,
+            "is_active":      s.is_active,
         })
-      
-   if request.method=="POST":
-      data       = request.get_json()
+    return jsonify(result), 200
 
-      email_id   = data.get("email_id", "")
-      staff_name = data.get("staff_name")
-      contact    = data.get("contact")
-      password   = data.get("password", "staff123")
-      spec       = data.get("specialization", "")
-      exp        = data.get("experience", "")
-      if not all([email_id, staff_name, contact]):
-            return jsonify({"message": "Name, email and contact are required"}), 400
-      if Staff.query.filter_by(email_id=email_id).first():
-              return jsonify({"message": "Staff already exists with this email"}), 400
-      if not Users.query.get(email_id):
-         db.session.add(Users(email_id=email_id, name=staff_name,
-                  contact=contact, password=password,
-               role='staff', specialization=spec, experience=exp))
-      else:
-           Users.query.filter_by(email_id=email_id).update({"role": "staff"})
-      s = Staff(email_id=email_id, staff_name=staff_name,
-               contact=contact, specialization=spec, experience=exp)
-      db.session.add(s)
-      db.session.commit()
-      return jsonify({"message": "Staff created successfully", "staff_id": s.staff_id}), 201
 
-      
-   return jsonify(result), 200
+
+@app.route('/staff', methods=['POST'])
+@jwt_required()
+def add_staff():
+   
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+
+    data       = request.get_json()
+    email_id   = data.get("email_id", "")
+    staff_name = (data.get("staff_name") or data.get("name", "")).strip()
+    contact    = str(data.get("contact", "")).strip()
+    password   = data.get("password", "").strip()
+    spec       = data.get("specialization", "")
+    exp        = data.get("experience", "")
+
+    if not all([email_id, staff_name, contact]):
+        return jsonify({"message": "Name, email and contact are required"}), 400
+
+    if Staff.query.filter_by(email_id=email_id).first():
+        return jsonify({"message": "Staff already exists with this email"}), 400
+
+    if not Users.query.get(email_id):
+        user = Users(
+            email_id=email_id, name=staff_name,
+            contact=contact, password=password,
+            role='staff', specialization=spec, experience=exp
+        )
+        db.session.add(user)
+    else:
+        Users.query.filter_by(email_id=email_id).update({"role": "staff"})
+
+    s = Staff(
+        email_id=email_id, staff_name=staff_name,
+        contact=contact, specialization=spec, experience=exp
+    )
+    db.session.add(s)
+    db.session.commit()
+
+
+    return jsonify({
+        "message":  f"Staff '{staff_name}' created. Login details sent to {email_id}",
+        "staff_id": s.staff_id
+    }), 201
+
 
 
 @app.route('/staff/<int:staff_id>/toggle', methods=['PUT'])
@@ -321,23 +324,27 @@ def add_trek():
    email, role = current_identity()
    if role != "admin":
       return jsonify({"message": "Unauthorized"}), 403
+   
    data  = request.get_json() or {}
-   name  = data.get("trek_name", "")
-   loc   = data.get("trek_Location", "")
-   sd    = data.get("start_date", "")
-   ed    = data.get("end_date", "")
+   name = data.get("trek_name", "").strip()
+   loc  = data.get("trek_Location", "").strip()
+   sd   = data.get("start_date", "")
+   ed   = data.get("end_date", "")
+
    if not all([name, loc, sd, ed]):
             return jsonify({"message": "Data are required"}), 400
-   slots = int(data.get("avilable_Slots", 10))
-   img   = data.get("image", "")
+   
+   slots = int(data.get("avilable_Slots"))
+   img   = data.get("image", "").strip()
+
    trek  = Treks(
             trek_name=name, trek_Location=loc,
             trek_difficulty=data.get("trek_difficulty", "Easy"),
             start_date=datetime.strptime(sd, '%Y-%m-%d'),
             end_date  =datetime.strptime(ed, '%Y-%m-%d'),
-            duration=int(data.get("duration", 1)),
+            duration=int(data.get("duration")),
             avilable_Slots=slots, total_slots=slots,
-            assigned_staff_id=data.get("assigned_staff_id") or None,
+            assigned_staff_id=data.get("assigned_staff_id"),
             status=data.get("status", "Open"),
             image=img, description=data.get("description", ""),
             price=float(data.get("price", 0)),
@@ -365,7 +372,7 @@ def update_trek(trek_id):
     for field in ("trek_name", "trek_Location", "trek_difficulty", "duration",
                   "avilable_Slots", "status", "image", "assigned_staff_id",
                   "description", "price", "completed", "total_slots"):
-      if field in data:
+        if field in data:
             setattr(trek, field, data[field])
 
     if "start_date" in data and data["start_date"]:
@@ -377,6 +384,8 @@ def update_trek(trek_id):
     db.session.commit()
 
     return jsonify({"message": "Trek updated successfully"}), 200
+
+
 
 @app.route('/treks/<int:trek_id>', methods=['DELETE'])
 @jwt_required()
@@ -470,11 +479,13 @@ def cancel_booking(booking_id):
     if role == "trekker" and b.user_id != email:
         return jsonify({"message": "You can only cancel your own bookings"}), 403
     
-    trek_id = b.trek_id
-    trek    = Treks.query.get(trek_id)
+    trek    = Treks.query.get(b.trek_id)
+
+    
 
     if trek:
         trek.avilable_Slots += 1
+
     db.session.delete(b)
     db.session.commit()
     return jsonify({"message": "Booking cancelled successfully"}), 200
@@ -488,13 +499,14 @@ def profile():
     user = Users.query.get(email)
     if not user:
         return jsonify({"message": "Not found"}), 404
+    
     if request.method == 'GET':
         return jsonify({
             "email_id": user.email_id, "name": user.name,
             "contact": user.contact, "role": user.role,
             "is_active": user.is_active
         }), 200
-    data = request.get_json() or {}
+    data = request.get_json()
     if data.get("name"):     user.name     = data["name"].strip()
     if data.get("contact"):  user.contact  = data["contact"].strip()
     if data.get("password"): user.password = data["password"]
@@ -510,6 +522,7 @@ def get_stats():
 
     if role != "admin":
         return jsonify({"message": "Unauthorized"}), 403
+
 
     recent = Booking.query.order_by(Booking.booking_date.desc()).limit(5).all()
 
@@ -531,9 +544,87 @@ def get_stats():
 
 
 # ─── REPORTS ──────────────────────────────────────────────────────────────────
+@app.route('/reports', methods=['GET'])
+@jwt_required()
+def get_reports():
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+
+    data = []
+    for t in Treks.query.all():
+        slots_filled = max(0, (t.total_slots or 0) - t.avilable_Slots)
+        data.append({
+            "trek_name":       t.trek_name,
+            "trek_location":   t.trek_Location,
+            "trek_difficulty": t.trek_difficulty,
+            "status":          t.status,
+            "total_slots":     t.total_slots,
+            "available_slots": t.avilable_Slots,
+            "slots_filled":    slots_filled,
+            "bookings_count":  Booking.query.filter_by(trek_id=t.trek_id).count(),
+            "fill_rate":       round((slots_filled / t.total_slots * 100) if t.total_slots else 0, 1)
+        })
+    return jsonify(data), 200
 
 
-# ─── HEALTH ──────────────────────────────────────────────────────────────────
+# ─── CHART DATA (for vue-chartjs) ─────────────────────────────────────────────
+@app.route('/charts/bookings-per-trek', methods=['GET'])
+@jwt_required()
+def chart_bookings_per_trek():
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+
+    labels = []
+    values = []
+    for t in Treks.query.all():
+        labels.append(t.trek_name)
+        values.append(Booking.query.filter_by(trek_id=t.trek_id).count())
+
+    return jsonify({"labels": labels, "values": values}), 200
+
+
+@app.route('/charts/difficulty-split', methods=['GET'])
+@jwt_required()
+def chart_difficulty_split():
+
+    _, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+
+    difficulty_map = {}
+    for t in Treks.query.all():
+        d = t.trek_difficulty
+        difficulty_map[d] = difficulty_map.get(d, 0) + 1
+
+    return jsonify({
+        "labels": list(difficulty_map.keys()),
+        "values": list(difficulty_map.values())
+    }), 200
+
+
+def chart_slots_status():
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+
+    labels    = []
+    available = []
+    filled    = []
+    for t in Treks.query.all():
+        labels.append(t.trek_name)
+        available.append(t.avilable_Slots)
+        filled.append(max(0, (t.total_slots or 0) - t.avilable_Slots))
+
+    return jsonify({
+        "labels":    labels,
+        "available": available,
+        "filled":    filled
+    }), 200
+
+
+
 
 
 
@@ -556,4 +647,39 @@ if __name__ == '__main__':
         db.session.add_all([s1, s2])
         db.session.commit()
 
+        sample = [
+                        {"name":"Everest Base Camp", "loc":"Nepal",            "diff":"Hard",     "dur":14, "slots":12, "img":TREK_IMAGES[0], "desc":"One of the world's most iconic treks through the Khumbu Valley.", "price":45000, "staff":s1.staff_id},
+                        {"name":"Roopkund Trek",     "loc":"Uttarakhand",      "diff":"Moderate", "dur":7,  "slots":15, "img":TREK_IMAGES[1], "desc":"Famous for the mysterious skeleton lake at 5029m altitude.",      "price":12000, "staff":s1.staff_id},
+                        {"name":"Hampta Pass",       "loc":"Himachal Pradesh", "diff":"Moderate", "dur":5,  "slots":20, "img":TREK_IMAGES[2], "desc":"A dramatic crossover trek from Kullu to Lahaul valley.",          "price":8500,  "staff":s2.staff_id},
+                        {"name":"Valley of Flowers", "loc":"Uttarakhand",      "diff":"Easy",     "dur":6,  "slots":25, "img":TREK_IMAGES[3], "desc":"UNESCO World Heritage site with stunning alpine wildflowers.",     "price":9000,  "staff":s2.staff_id},
+                        {"name":"Kedarkantha Trek",  "loc":"Uttarakhand",      "diff":"Easy",     "dur":5,  "slots":18, "img":TREK_IMAGES[4], "desc":"A perfect winter trek with 360° summit panoramas.",               "price":7500,  "staff":None},
+                        {"name":"Chadar Trek",       "loc":"Ladakh",           "diff":"Expert",   "dur":9,  "slots":10, "img":TREK_IMAGES[5], "desc":"Walk on the frozen Zanskar river — nature's ultimate adventure.", "price":22000, "staff":None},
+                    ]
+        treks_list = []
+        for i, t in enumerate(sample):
+            obj = Treks(
+                trek_name=t["name"], trek_Location=t["loc"], trek_difficulty=t["diff"],
+                start_date=datetime(2026, 9+(i//2), 10),
+                end_date  =datetime(2026, 9+(i//2), 10+t["dur"]),
+                duration=t["dur"], avilable_Slots=t["slots"], total_slots=t["slots"],
+                assigned_staff_id=t["staff"], status="Open",
+                image=t["img"], description=t["desc"], price=t["price"]
+            )
+            db.session.add(obj)
+            treks_list.append(obj)
+            db.session.commit()
+            
+                    # Seed sample bookings
+        for uid, tr, d, st, pay in [
+            (trek1.email_id, treks_list[0], '2026-05-12', 'Confirmed', 'Paid'),
+            (trek2.email_id, treks_list[1], '2026-05-15', 'Confirmed', 'Paid'),
+            (trek3.email_id, treks_list[0], '2026-05-18', 'Confirmed', 'Paid'),
+            (trek2.email_id, treks_list[3], '2026-05-20', 'Confirmed', 'Paid'),
+        ]:
+            b = Booking(user_id=uid, trek_id=tr.trek_id, status=st,
+                        payment_status=pay, booking_date=datetime.strptime(d, '%Y-%m-%d'))
+            tr.avilable_Slots = max(0, tr.avilable_Slots - 1)
+            db.session.add(b)
+            db.session.commit()
+            
     app.run(debug=True)
