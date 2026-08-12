@@ -3,3 +3,15 @@ Flask
 Flask-SQLAlchemy
 Flask-JWT-Extended
 Flask-CORS
+celery
+redis
+flask_caching
+
+
+
+# Run
+# python3 app.py
+# redis-server
+# celery -A celery_worker.celery_app worker --loglevel=info
+# celery -A celery_worker.celery_app beat --loglevel=info
+# ~/go/bin/MailHog

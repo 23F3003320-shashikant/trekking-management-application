@@ -1,10 +1,16 @@
 
 <template>
   <div>
-   <div v-if="!trek" class="text-center py-5 text-muted">
+    <!-- No trek selected -->
+    <div v-if="!trek" class="text-center py-5 text-muted">
+      <i class="bi bi-signpost fs-1 d-block mb-3 opacity-50"></i>
+      <p>Select a trek from Dashboard to manage it</p>
+      <button class="btn btn-primary" @click="$emit('go-tab', 'dashboard')">
+        <i class="bi bi-arrow-left me-1"></i>Go to Dashboard
+      </button>
     </div>
 
-    <!-- selected Trek manage panel -->
+    <!-- Only selected Trek show manage panel -->
     <div v-else>
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
@@ -120,7 +126,6 @@ export default {
   name: 'StaffMyTreks',
   emits: ['go-tab'],
 
-  // trek is passed from StaffDash.vue when user clicks Manage
   props: {
     trek: { type: Object, default: null }
   },
@@ -143,7 +148,6 @@ export default {
     }
   },
 
-  // When trek prop changes (user picks a different trek), reload form + participants
   watch: {
     trek(newTrek) {
       if (newTrek) {

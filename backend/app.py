@@ -4,6 +4,14 @@ from flask_cors import CORS
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 
+from flask_caching import Cache
+
+from mailer import (
+    send_welcome_user,
+    send_welcome_staff,
+    send_booking_confirmed,
+    send_booking_cancelled
+)
 
 
 
@@ -15,8 +23,12 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///db.sqlite3'
 app.config["SECRET_KEY"]='you-secret-key'
 app.config["JWT_SECRET_KEY"]="your-jwt-key"
+app.config["cache_type"] = "RedisCache"
+app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"
 
-CORS(app)
+cache = Cache(app)
+
+CORS(app, origins='*')
 JWTManager(app)
 db.init_app(app)
 
@@ -138,6 +150,9 @@ def Register():
 
     db.session.commit()
 
+    send_welcome_user(email_id, name)
+
+
     return jsonify({"message":"You are registered successfully"}), 201
 
 
@@ -147,27 +162,27 @@ def Register():
 
 # ───  Admin(USERS) ────────────────────────────────────────────────────────────
 
-@app.route('/users', methods=["GET"])
+@app.route('/users', methods=['GET'])
 @jwt_required()
-def admin_dashboard():
-   identity = get_jwt_identity()
+def get_users():
+    _, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
 
-   if identity.get("role") != "admin":
-      return jsonify({"error": "Unauthorized access"}), 403
+    q     = request.args.get('q', '').lower()
+    users = Users.query.filter_by(role='trekker').all()
+    result = []
+    for u in users:
+        if q and q not in u.name.lower() and q not in u.email_id.lower():
+            continue
+        result.append({
+            "email_id":   u.email_id, "name": u.name,
+            "contact":    u.contact,  "is_active": u.is_active,
+            "created_at": u.created_at.strftime('%d %b %Y') if u.created_at else ""
+        })
+    return jsonify(result), 200
 
-   users = Users.query.filter_by(role='trekker').all()
 
-   result = []
-   for user in users:
-      result.append({
-         "email_id": user.email_id,
-         "name": user.name,
-         "contact": user.contact,
-         "is_active": user.is_active,
-         "created_at": user.created_at.strftime('%Y-%m-%d') 
-      })
-
-   return jsonify(result), 200
 
 
 @app.route('/users/<email_id>/toggle', methods=['PUT'])
@@ -205,6 +220,35 @@ def delete_user(email_id):
     db.session.delete(user)
     db.session.commit()
     return jsonify({"message": "User deleted"}), 200
+
+
+@app.route('/admin/trigger-daily-reminder', methods=['POST'])
+@jwt_required()
+def trigger_daily_reminder():
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+    try:
+        from tasks import send_daily_reminder
+        task = send_daily_reminder.delay()
+        return jsonify({"message": "Daily reminder task triggered", "task_id": task.id}), 200
+    except Exception as e:
+        return jsonify({"message": f"Celery unavailable: {str(e)}"}), 503
+
+
+@app.route('/admin/trigger-monthly-report', methods=['POST'])
+@jwt_required()
+def trigger_monthly_report():
+    email, role = current_identity()
+    if role != "admin":
+        return jsonify({"message": "Unauthorized"}), 403
+    try:
+        from tasks import send_monthly_report
+        task = send_monthly_report.delay()
+        return jsonify({"message": "Monthly report task triggered", "task_id": task.id}), 200
+    except Exception as e:
+        return jsonify({"message": f"Celery unavailable: {str(e)}"}), 503
+
 
 
 # ─── STAFF ────────────────────────────────────────────────────────────────────
@@ -265,6 +309,7 @@ def add_staff():
     db.session.add(s)
     db.session.commit()
 
+    send_welcome_staff(email_id, staff_name, password)
 
     return jsonify({
         "message":  f"Staff '{staff_name}' created. Login details sent to {email_id}",
@@ -352,7 +397,7 @@ def add_trek():
    db.session.add(trek)
    db.session.commit()
 
-   return jsonify({"message": "trek created successfully", "trek_id": trek.id}), 201
+   return jsonify({"message": "trek created successfully", "trek_id": trek.trek_id}), 201
 
 @app.route('/treks/<int:trek_id>', methods=['PUT'])
 @jwt_required()
@@ -461,6 +506,11 @@ def create_booking():
     trek.avilable_Slots -= 1
     db.session.add(booking)
     db.session.commit()
+
+    user = Users.query.get(email)
+    if user:
+        send_booking_confirmed(email, user.name, booking.booking_id, trek)
+
     return jsonify({
             "message": "Trek booked successfully!",
             "booking_id": booking.booking_id,
@@ -479,8 +529,11 @@ def cancel_booking(booking_id):
     if role == "trekker" and b.user_id != email:
         return jsonify({"message": "You can only cancel your own bookings"}), 403
     
-    trek    = Treks.query.get(b.trek_id)
+    trek = Treks.query.get(b.trek_id)
+    user = Users.query.get(b.user_id)
 
+    if user and trek:
+            send_booking_cancelled(user.email_id, user.name, booking_id, trek)
     
 
     if trek:
@@ -490,6 +543,20 @@ def cancel_booking(booking_id):
     db.session.commit()
     return jsonify({"message": "Booking cancelled successfully"}), 200
 
+@app.route('/bookings/export', methods=['POST'])
+@jwt_required()
+def export_bookings():
+    email, role= current_identity()
+    try:
+        from tasks import export_trekker_bookings
+        export_trekker_bookings.delay(email)
+        return jsonify({
+            "message": f"Booking export email sent to {email}. Check MailHog at http://localhost:8025"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "message": f"Celery unavailable: {str(e)}. Start with: celery -A celery_worker.celery_app worker --loglevel=info"
+        }), 503
    
 # ─── PROFILE ──────────────────────────────────────────────────────────────────
 @app.route('/profile', methods=['GET', 'PUT'])

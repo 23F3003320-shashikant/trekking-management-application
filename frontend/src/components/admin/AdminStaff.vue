@@ -48,10 +48,6 @@
             <input class="form-control" v-model="form.experience" placeholder="e.g. 3 years" />
           </div>
         </div>
-        <div class="alert alert-info d-flex gap-2 align-items-start mt-3 mb-0 py-2">
-          <i class="bi bi-envelope-fill flex-shrink-0 mt-1 text-info"></i>
-          <small>Login credentials will be emailed to the staff via MailHog. Check <strong>http://localhost:8025</strong></small>
-        </div>
       </div>
       <div class="card-footer bg-white d-flex gap-2 justify-content-end">
         <button class="btn btn-light" @click="closeForm">Cancel</button>

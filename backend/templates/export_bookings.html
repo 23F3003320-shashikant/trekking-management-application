@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f6f8; margin:0; padding:20px; }
+    .box { background:#fff; max-width:600px; margin:0 auto; border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,0.1); }
+    .header { background:linear-gradient(135deg,#0f3460,#3b82f6); padding:32px 30px; text-align:center; }
+    .header h1 { color:#fff; margin:0; font-size:22px; }
+    .header p  { color:rgba(255,255,255,0.8); margin:6px 0 0; font-size:13px; }
+    .body { padding:28px 30px; }
+    .body h2 { color:#0f3460; font-size:17px; margin-top:0; }
+    .summary { background:#f0f5ff; border-radius:8px; padding:14px 18px; margin:16px 0; display:flex; gap:24px; }
+    .sum-item { text-align:center; }
+    .sum-num { font-size:24px; font-weight:bold; color:#3b82f6; }
+    .sum-lbl { font-size:11px; color:#888; }
+    table { width:100%; border-collapse:collapse; margin-top:16px; font-size:13px; }
+    th { background:#0f3460; color:#fff; padding:9px 10px; text-align:left; }
+    td { padding:8px 10px; border-bottom:1px solid #f0f0f0; color:#444; }
+    tr:nth-child(even) td { background:#f8faff; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:bold; }
+    .badge-confirmed { background:#d1fae5; color:#065f46; }
+    .badge-cancelled { background:#fee2e2; color:#991b1b; }
+    .footer { text-align:center; padding:16px; color:#aaa; font-size:12px; border-top:1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="header">
+      <h1>📋 Your Booking History</h1>
+      <p>Trekking Management Application</p>
+    </div>
+    <div class="body">
+      <h2>Hello {{ user_name }},</h2>
+      <p style="color:#555;font-size:14px">Here is your complete trekking booking history as requested:</p>
+
+      <div class="summary">
+        <div class="sum-item">
+          <div class="sum-num">{{ total_bookings }}</div>
+          <div class="sum-lbl">Total Bookings</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Trek</th>
+            <th>Location</th>
+            <th>Dates</th>
+            <th>Booked On</th>
+            <th>Status</th>
+            <th>Payment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bookings %}
+          <tr>
+            <td>{{ b.booking_id }}</td>
+            <td>{{ b.trek_name }}</td>
+            <td>{{ b.trek_location }}</td>
+            <td style="font-size:12px">{{ b.start_date }} – {{ b.end_date }}</td>
+            <td style="font-size:12px">{{ b.booking_date }}</td>
+            <td>
+              <span class="badge {% if b.status == 'Confirmed' %}badge-confirmed{% else %}badge-cancelled{% endif %}">
+                {{ b.status }}
+              </span>
+            </td>
+            <td>{{ b.payment_status }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;color:#888;padding:20px">No bookings found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="footer">© 2026 Trekking Management Application</div>
+  </div>
+</body>
+</html>
